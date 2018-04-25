@@ -6,6 +6,7 @@ import re
 import json
 import time
 import sys
+import csv
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -71,7 +72,7 @@ class SMWPage:
         try:
             rsp = requests.get(self._get_url(), verify=False)
         except Exception as e:
-            print('Exception when retrieving the page {}'.format(self._url))
+            print('Exception when retrieving the page {}'.format(self._get_url()))
             print('{}'.format(e))
             return
 
@@ -92,7 +93,7 @@ class SMWPage:
 
                 result.append({
                     'name': name,
-                    'revenue': int(matchObj_revenue.group(1)),
+                    'revenue': int(matchObj_revenue.group(1)) * 1000000,
                     'position_in_year': int(matchObj_pos.group(1)),
                     'year': self.year
                 })
@@ -100,13 +101,39 @@ class SMWPage:
         return result
 
 
+def get_args():
+    arg_parser = argparse.ArgumentParser('Scrapper for the Summer Movie Wager page (http://thesummermoviewager.com/)')
+    arg_parser.add_argument('-o', '--output', action='store', required=True)
+    arg_parser.add_argument('-s', '--start-year', dest='start_year', action='store', type=int, default=2007)
+    arg_parser.add_argument('-e', '--end-year', dest='end_year', action='store', type=int, default=2017)
+
+    return arg_parser.parse_args()
+
 if __name__ == '__main__':
-    years = range(2007, 2017+1)
+    args = get_args()
+    output_filepath = args.output
+    start_year = args.start_year
+    end_year = args.end_year
+
+    years = range(start_year, end_year + 1)
 
     result = []
 
-    for year in years:
-        page = SMWPage(year)
-        result += page.parse()
+    print('Starting to scrap...')
 
-    print(result)
+    with open(output_filepath, 'wb') as ofile:
+        fieldnames = ['name', 'revenue', 'position_in_year', 'year']
+        writer = csv.DictWriter(ofile, fieldnames=fieldnames, delimiter=';')
+        writer.writeheader()
+
+        progress = 1
+        for year in years:
+            print_progress(progress, len(years), suffix='({})'.format(year), bar_length=50)
+            page = SMWPage(year)
+            result += page.parse()
+
+            writer.writerows(result)
+
+            progress+=1
+
+    print('\nFinished successfully')
